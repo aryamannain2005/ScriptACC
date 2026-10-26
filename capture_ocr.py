@@ -274,6 +274,8 @@ class OverlayManager(QObject):
         self.overlays.append(o)
         self.current_overlay = o
         o.show()
+        o.raise_()
+        o.activateWindow()
         QTimer.singleShot(26000, lambda: self.overlays.remove(o) if o in self.overlays else None)
 
     @Slot()
@@ -544,6 +546,11 @@ def main():
     print("  TERMINAL FALLBACK (Zero permission needed):")
     print("    Press ENTER for Coding Mode, or type m, 8, 9, 0, b, f, g, q")
     print("=" * 60)
+
+    # Instant Welcome Popup on Screen
+    QTimer.singleShot(600, lambda: comm.overlay_requested.emit(
+        "🟢 ScriptACC Connected!\n─────────────────────────────\nModel: Groq 120B Active ⚡\n⌥+8 (Coding) | ⌥+M (MCQ)\nOr press ENTER in terminal!", 0.95
+    ))
 
     sys.exit(app.exec())
 
