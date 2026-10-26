@@ -163,6 +163,54 @@ def auto_type(text: str, ghost: bool = False):
     print("  ✅ Typing complete.")
 
 
+# ── Anti-Capture / Screen Share Stealth Engine ──────────────────────────────
+
+def apply_screen_share_protection(widget):
+    """
+    Excludes the overlay window from screen-sharing, recording, and proctoring capture streams.
+    - Windows: Uses SetWindowDisplayAffinity (WDA_EXCLUDEFROMCAPTURE) -> 100% invisible in Zoom/Teams/Meet
+    - macOS: Uses NSWindowSharingNone (0) -> invisible to ScreenCaptureKit / Window sharing
+    """
+    # Windows native DWM exclusion
+    if sys.platform == 'win32':
+        try:
+            import ctypes
+            hwnd = int(widget.winId())
+            # WDA_EXCLUDEFROMCAPTURE = 0x00000011 (Windows 10 2004+ and Windows 11)
+            result = ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, 0x00000011)
+            if not result:
+                # Fallback for Windows 7/8/10 older
+                ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, 0x00000001)
+        except Exception:
+            pass
+
+    # macOS native Cocoa exclusion
+    elif sys.platform == 'darwin':
+        try:
+            import ctypes
+            import ctypes.util
+            objc = ctypes.cdll.LoadLibrary(ctypes.util.find_library('objc'))
+            objc.sel_registerName.restype = ctypes.c_void_p
+            objc.sel_registerName.argtypes = [ctypes.c_char_p]
+
+            msgSend = objc.objc_msgSend
+            msgSend.restype = ctypes.c_void_p
+            msgSend.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+
+            sel_window = objc.sel_registerName(b"window")
+            sel_setSharingType = objc.sel_registerName(b"setSharingType:")
+
+            view_ptr = int(widget.winId())
+            win_ptr = msgSend(view_ptr, sel_window)
+            if win_ptr:
+                msgSend_set = objc.objc_msgSend
+                msgSend_set.restype = None
+                msgSend_set.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_ulong]
+                msgSend_set(win_ptr, sel_setSharingType, 0)  # 0 = NSWindowSharingNone
+        except Exception:
+            pass
+
+
 # ── Overlay UI Widget ────────────────────────────────────────────────────────
 
 class OverlayLabel(QLabel):
@@ -192,6 +240,9 @@ class OverlayLabel(QLabel):
         x = min(cursor_pos.x() + 25, screen.width() - self.width() - 30)
         y = min(cursor_pos.y() + 25, screen.height() - self.height() - 30)
         self.move(max(30, x), max(30, y))
+
+        # Apply stealth protection: Inaudible / Invisible to Screen Sharing & Recorders
+        apply_screen_share_protection(self)
 
         # Auto-dismiss after 25 seconds
         QTimer.singleShot(25000, self.close)
