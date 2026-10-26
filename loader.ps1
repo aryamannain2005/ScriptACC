@@ -100,6 +100,8 @@ if (-not $tess) {
     Write-Host "[!] Tesseract OCR not found. Installing via winget..." -ForegroundColor Yellow
     winget install UB-Mannheim.TesseractOCR --silent --accept-package-agreements --accept-source-agreements | Out-Null
     $env:Path += ";C:\Program Files\Tesseract-OCR"
+}
+
 # 8. Auto-configure Groq Cloud Engine (Zero-Config setup for user)
 try {
     $cfgPath = "$workspace\config.yaml"
