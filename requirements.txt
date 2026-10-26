@@ -6,3 +6,4 @@ PySide6>=6.7.0
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 pyyaml>=6.0.2
+winocr; sys_platform == 'win32'

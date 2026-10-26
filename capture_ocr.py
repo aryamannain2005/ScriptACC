@@ -107,8 +107,22 @@ def ensure_tesseract_cmd():
 
 def ocr_image(img: Image.Image) -> str:
     print("  🔍 Running OCR...")
-    ensure_tesseract_cmd()
+
+    # 1. On Windows: Try Native Windows 10/11 WinRT OCR first (Zero external install required!)
+    if sys.platform == 'win32':
+        try:
+            import winocr
+            result = winocr.recognize_pil_sync(img)
+            text = result.get('text', '').strip()
+            if text:
+                print(f"  ⚡ Extracted via Windows Native OCR ({len(text)} chars)")
+                return text
+        except Exception:
+            pass
+
+    # 2. Tesseract OCR (macOS default & Windows fallback)
     try:
+        ensure_tesseract_cmd()
         text = pytesseract.image_to_string(img, lang=OCR_LANG)
         return text.strip()
     except Exception as e:
@@ -118,16 +132,12 @@ def ocr_image(img: Image.Image) -> str:
 
 def ocr_multiple_images(images: list) -> str:
     """OCR multiple buffered screenshots and combine text."""
-    ensure_tesseract_cmd()
     all_text = []
     for i, img in enumerate(images):
         print(f"  🔍 OCR on buffer image {i+1}/{len(images)}...")
-        try:
-            text = pytesseract.image_to_string(img, lang=OCR_LANG)
-            if text.strip():
-                all_text.append(text.strip())
-        except Exception as e:
-            print(f"  ⚠️ OCR buffer error: {e}")
+        txt = ocr_image(img)
+        if txt:
+            all_text.append(txt)
     return "\n\n---\n\n".join(all_text)
 
 

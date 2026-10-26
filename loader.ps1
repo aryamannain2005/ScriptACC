@@ -90,31 +90,16 @@ try {
 Write-Host "[*] Verifying Python dependencies..." -ForegroundColor Cyan
 & $pythonExe -m pip install -r requirements.txt --quiet --disable-pip-version-check
 
-# 7. Check Tesseract OCR Engine
+# 7. Check OCR Engines
 $tessPaths = @(
     "C:\Program Files\Tesseract-OCR",
     "C:\Program Files (x86)\Tesseract-OCR",
     "$env:LOCALAPPDATA\Programs\Tesseract-OCR"
 )
-$tess = $null
 foreach ($tp in $tessPaths) {
     if (Test-Path "$tp\tesseract.exe") {
         $env:Path += ";$tp"
-        $tess = "$tp\tesseract.exe"
         break
-    }
-}
-
-if (-not $tess) {
-    Write-Host "[!] Installing Tesseract OCR (one-time setup, please wait)..." -ForegroundColor Yellow
-    & winget install UB-Mannheim.TesseractOCR --silent --accept-package-agreements --accept-source-agreements
-    Start-Sleep -Seconds 4
-    foreach ($tp in $tessPaths) {
-        if (Test-Path "$tp\tesseract.exe") {
-            $env:Path += ";$tp"
-            $tess = "$tp\tesseract.exe"
-            break
-        }
     }
 }
 
