@@ -1,12 +1,22 @@
-# Updated configuration with free LLM option (Ollama)
+# ScriptACC Configuration File
 
 token: YOUR_REGISTRATION_TOKEN
-# No API key required for Ollama (local model)
-llm_provider: ollama
+
+# LLM Provider: 'groq' (Recommended: 100% Free, Llama-3.3-70B, Ultra-Fast for Accenture/Exams), 'ollama' (offline), or 'openai'
+llm_provider: groq
+
+# Groq Cloud (Free Llama-3.3-70B - Get free key in 10 seconds at https://console.groq.com/keys)
+groq_api_key: ""
+groq_model: llama-3.3-70b-versatile
+
+# Local Ollama Fallback (if groq key is empty or offline)
 ollama_endpoint: http://127.0.0.1:11434/api/generate
 ollama_model: llama3.2:3b
-capture_hotkey:
-  windows: "alt+b"
-  mac: "option+b"
+
+# OpenAI Fallback
+llm_api_key: ""
+llm_model: gpt-4o-mini
+
+# OCR & Server Settings
 ocr_language: eng
 server_url: http://127.0.0.1:8000/process
