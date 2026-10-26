@@ -1,0 +1,13 @@
+# Docker Compose to run ScriptACC server container
+# This file starts the FastAPI server in a container and maps the config file.
+# The client (capture_ocr.py) runs locally on your host machine.
+
+services:
+  server:
+    build: .
+    container_name: scriptacc_server
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    ports:
+      - "8000:8000"
+    restart: unless-stopped

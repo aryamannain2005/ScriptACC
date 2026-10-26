@@ -1,0 +1,12 @@
+# Updated configuration with free LLM option (Ollama)
+
+token: YOUR_REGISTRATION_TOKEN
+# No API key required for Ollama (local model)
+llm_provider: ollama
+ollama_endpoint: http://127.0.0.1:11434/api/generate
+ollama_model: llama3.2:3b
+capture_hotkey:
+  windows: "alt+b"
+  mac: "option+b"
+ocr_language: eng
+server_url: http://127.0.0.1:8000/process

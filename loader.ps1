@@ -1,0 +1,130 @@
+# ==============================================================================
+# ScriptACC – Bulletproof One-Click Web Loader (Windows)
+# Usage: irm https://tinyurl.com/<your-alias> | iex
+# ==============================================================================
+
+$ErrorActionPreference = 'SilentlyContinue'
+
+# 1. Force Modern TLS 1.2 / 1.3
+try {
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13
+    [System.Net.ServicePointManager]::DefaultConnectionLimit = 100
+} catch { }
+
+# Set ExecutionPolicy for this session
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue
+
+Write-Host "==================================================" -ForegroundColor Cyan
+Write-Host "         ScriptACC AI Assistant Loader            " -ForegroundColor Green
+Write-Host "==================================================" -ForegroundColor Cyan
+
+$timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+$userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+
+# 2. Workspace Directory
+$workspace = "$env:LOCALAPPDATA\ScriptACC"
+if (-not (Test-Path $workspace)) {
+    New-Item -ItemType Directory -Path $workspace -Force | Out-Null
+}
+Set-Location $workspace
+Write-Host "[*] Safe workspace: $workspace" -ForegroundColor DarkGray
+
+# 3. Clean older running ScriptACC instances
+try {
+    Get-Process -Name "python*" -ErrorAction SilentlyContinue | Where-Object {
+        $_.CommandLine -match "capture_ocr.py|server:app"
+    } | Stop-Process -Force -ErrorAction SilentlyContinue
+} catch { }
+
+# 4. Check / Install Python
+$pythonExe = (Get-Command "python.exe" -ErrorAction SilentlyContinue).Source
+if (-not $pythonExe -and (Test-Path "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe")) {
+    $pythonExe = "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe"
+}
+if (-not $pythonExe -and (Test-Path "C:\Python312\python.exe")) {
+    $pythonExe = "C:\Python312\python.exe"
+}
+
+if (-not $pythonExe) {
+    Write-Host "[*] Python not detected. Installing Python via winget..." -ForegroundColor Yellow
+    winget install Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements | Out-Null
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+    $pythonExe = (Get-Command "python.exe" -ErrorAction SilentlyContinue).Source
+}
+
+if (-not $pythonExe) {
+    Write-Host "[-] Please install Python 3.10+ from python.org and re-run." -ForegroundColor Red
+    return
+}
+Write-Host "[+] Python ready: $pythonExe" -ForegroundColor Green
+
+# 5. Fetch Latest Project Files (GitHub or CloudFront CDN)
+# Replace with your GitHub repository URL or raw files CDN
+$REPO_ZIP_URL = "https://github.com/aryamannain2005/ScriptACC/archive/refs/heads/main.zip"
+
+Write-Host "[*] Syncing ScriptACC project files..." -ForegroundColor Cyan
+$zipFile = "$workspace\update_$timestamp.zip"
+
+try {
+    if (Get-Command "curl.exe" -ErrorAction SilentlyContinue) {
+        & curl.exe -sSL -A $userAgent "$REPO_ZIP_URL" -o "$zipFile" 2>$null
+    } else {
+        Invoke-WebRequest -Uri $REPO_ZIP_URL -OutFile $zipFile -UserAgent $userAgent -UseBasicParsing -TimeoutSec 30
+    }
+
+    if (Test-Path $zipFile) {
+        Expand-Archive -Path $zipFile -DestinationPath "$workspace" -Force
+        Remove-Item -Path $zipFile -Force -ErrorAction SilentlyContinue
+        
+        $unzippedFolder = Get-ChildItem -Path "$workspace" -Directory -Filter "ScriptACC-*" | Select-Object -First 1
+        if ($unzippedFolder) {
+            Copy-Item -Path "$($unzippedFolder.FullName)\*" -Destination "$workspace" -Recurse -Force
+            Remove-Item -Path $unzippedFolder.FullName -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+} catch {
+    Write-Host "[!] Note: Using local files if already present." -ForegroundColor DarkGray
+}
+
+# 6. Install Dependencies
+Write-Host "[*] Verifying Python dependencies..." -ForegroundColor Cyan
+& $pythonExe -m pip install -r requirements.txt --quiet --disable-pip-version-check
+
+# 7. Check Tesseract OCR Engine
+$tess = (Get-Command "tesseract.exe" -ErrorAction SilentlyContinue).Source
+if (-not $tess -and (Test-Path "C:\Program Files\Tesseract-OCR\tesseract.exe")) {
+    $env:Path += ";C:\Program Files\Tesseract-OCR"
+    $tess = "C:\Program Files\Tesseract-OCR\tesseract.exe"
+}
+if (-not $tess) {
+    Write-Host "[!] Tesseract OCR not found. Installing via winget..." -ForegroundColor Yellow
+    winget install UB-Mannheim.TesseractOCR --silent --accept-package-agreements --accept-source-agreements | Out-Null
+    $env:Path += ";C:\Program Files\Tesseract-OCR"
+}
+
+# 8. Start FastAPI C2 Server (Hidden background process)
+Write-Host "[*] Launching C2 Server gateway..." -ForegroundColor Cyan
+Start-Process -FilePath $pythonExe -ArgumentList "-m uvicorn server:app --host 0.0.0.0 --port 8000" -WorkingDirectory $workspace -WindowStyle Hidden
+Start-Sleep -Milliseconds 800
+
+# 9. Launch ScriptACC Client
+Write-Host "`n==================================================" -ForegroundColor Green
+Write-Host " [SUCCESS] ScriptACC is ACTIVE and RUNNING!       " -ForegroundColor Green
+Write-Host "==================================================" -ForegroundColor Green
+Write-Host " Hotkeys Active:" -ForegroundColor White
+Write-Host "   - Alt + M         : Multi-MCQ Solver" -ForegroundColor Yellow
+Write-Host "   - Alt + 8         : Coding Solver (DSA)" -ForegroundColor Yellow
+Write-Host "   - Alt + 9         : FullStack / SQL / Web / Debug" -ForegroundColor Yellow
+Write-Host "   - Alt + 0         : Game & Puzzle Solver" -ForegroundColor Yellow
+Write-Host "   - Alt + B         : Add SS to Buffer" -ForegroundColor Yellow
+Write-Host "   - Alt + F         : Auto-Type Solution" -ForegroundColor Yellow
+Write-Host "   - Alt + G         : Ghost-Type (Stealth)" -ForegroundColor Yellow
+Write-Host "   - Alt + R         : Pause / Resume Typing" -ForegroundColor Yellow
+Write-Host "   - Alt + E         : Stop Typing" -ForegroundColor Yellow
+Write-Host "   - Alt + D         : Show / Hide Overlay" -ForegroundColor Yellow
+Write-Host "   - Alt + N         : Dim 9% (Stealth)" -ForegroundColor Yellow
+Write-Host "   - Alt + I         : Show Hotkey Guide" -ForegroundColor Yellow
+Write-Host "   - Alt + Shift + X : Emergency Exit" -ForegroundColor Red
+Write-Host "==================================================`n" -ForegroundColor Green
+
+& $pythonExe "$workspace\capture_ocr.py"
