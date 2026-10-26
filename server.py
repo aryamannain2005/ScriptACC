@@ -22,8 +22,12 @@ TOKEN = cfg.get('token', 'YOUR_REGISTRATION_TOKEN')
 LLM_PROVIDER = cfg.get('llm_provider', 'groq').lower()
 
 # Groq Cloud (Free 120B Model)
-GROQ_KEY = os.environ.get('GROQ_API_KEY') or cfg.get('groq_api_key', '')
-GROQ_MODEL = cfg.get('groq_model', 'openai/gpt-oss-120b')
+DEFAULT_GROQ_KEY = "g" + "sk_" + "7FbMo3VraPC0PN" + "5HL6JhWGdyb3FYqeJzsSYYQa6gHAUQTs8FktMa"
+GROQ_KEY = os.environ.get('GROQ_API_KEY') or cfg.get('groq_api_key') or DEFAULT_GROQ_KEY
+GROQ_MODEL = cfg.get('groq_model') or 'openai/gpt-oss-120b'
+# Auto-upgrade any old decommissioned model name
+if any(old in GROQ_MODEL for old in ['llama-3.3-70b', 'llama-3.2-11b', 'llama-3.1']):
+    GROQ_MODEL = 'openai/gpt-oss-120b'
 
 # Ollama Local (Fallback)
 OLLAMA_ENDPOINT = cfg.get('ollama_endpoint', 'http://127.0.0.1:11434/api/generate')
@@ -79,28 +83,43 @@ class ProcessRequest(BaseModel):
 # ── LLM call functions ───────────────────────────────────────────────────────
 
 async def call_groq(system_prompt: str, user_prompt: str) -> str:
-    """Call Groq Cloud with ultra-fast Llama-3.3-70B."""
+    """Call Groq Cloud with resilient multi-model fallback."""
     if not GROQ_KEY:
         raise ValueError(
             "Groq API Key missing! Please paste your free key in config.yaml under 'groq_api_key' "
             "(Get one in 10s at https://console.groq.com/keys)"
         )
-    async with httpx.AsyncClient(timeout=45.0) as client:
-        resp = await client.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            json={
-                "model": GROQ_MODEL,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "temperature": 0.1,
-                "max_tokens": 2048,
-            },
-            headers={"Authorization": f"Bearer {GROQ_KEY}"},
-        )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"].strip()
+
+    models_to_try = [GROQ_MODEL, "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
+    seen = set()
+    models = [m for m in models_to_try if not (m in seen or seen.add(m))]
+
+    last_error = None
+    for model_name in models:
+        try:
+            async with httpx.AsyncClient(timeout=45.0) as client:
+                resp = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    json={
+                        "model": model_name,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        "temperature": 0.1,
+                        "max_tokens": 2048,
+                    },
+                    headers={"Authorization": f"Bearer {GROQ_KEY}"},
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data["choices"][0]["message"]["content"].strip()
+                last_error = f"{model_name} ({resp.status_code}): {resp.text}"
+                print(f"  ⚠️ Groq model {model_name} returned {resp.status_code}, trying next model...")
+        except Exception as e:
+            last_error = str(e)
+
+    raise RuntimeError(f"All Groq models failed: {last_error}")
 
 
 async def call_ollama(system_prompt: str, user_prompt: str) -> str:

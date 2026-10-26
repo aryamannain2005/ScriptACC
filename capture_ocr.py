@@ -25,6 +25,15 @@ Terminal Commands (Fallback without Accessibility permissions):
 
 import os
 import sys
+
+# Safe stream handles for windowless / background execution (pythonw.exe)
+if sys.stdout is None:
+    class _DummyStream:
+        def write(self, s): pass
+        def flush(self): pass
+    sys.stdout = _DummyStream()
+if sys.stderr is None:
+    sys.stderr = _DummyStream()
 import time
 import random
 import yaml
@@ -254,36 +263,44 @@ def apply_screen_share_protection(widget):
 class OverlayLabel(QLabel):
     def __init__(self, message: str, opacity: float = 0.92):
         super().__init__(message)
+        self.setTextFormat(Qt.PlainText)
         self.setWordWrap(True)
-        self.setMaximumWidth(700)
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setWindowOpacity(opacity)
+        self.setMaximumWidth(760)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.WindowDoesNotAcceptFocus)
+        self.setAttribute(Qt.WA_StyledBackground, True)
 
         self.setStyleSheet(
-            "background-color: rgba(18, 18, 22, 235);"
+            "background-color: #0d0e12;"
             "color: #00FF66;"
-            "padding: 16px 20px;"
+            "padding: 18px 24px;"
             "border-radius: 12px;"
-            "font-family: 'SF Mono', 'Menlo', 'Courier New', monospace;"
-            "font-size: 12pt;"
+            "font-family: 'Consolas', 'SF Mono', 'Menlo', monospace;"
+            "font-size: 13pt;"
             "font-weight: 500;"
-            "border: 1px solid rgba(0, 255, 102, 0.35);"
+            "border: 2px solid #00FF66;"
         )
+        self.setWindowOpacity(opacity)
         self.adjustSize()
 
         # Clamp safely within visible screen boundaries
         cursor_pos = QCursor.pos()
         screen = QApplication.primaryScreen().availableGeometry()
-        x = min(cursor_pos.x() + 25, screen.width() - self.width() - 30)
-        y = min(cursor_pos.y() + 25, screen.height() - self.height() - 30)
-        self.move(max(30, x), max(30, y))
+        x = cursor_pos.x() + 25
+        y = cursor_pos.y() + 25
+        if x <= 50 and y <= 50:
+            x = screen.width() - self.width() - 50
+            y = 100
+        else:
+            if x + self.width() > screen.width() - 20:
+                x = screen.width() - self.width() - 20
+            if y + self.height() > screen.height() - 20:
+                y = screen.height() - self.height() - 20
+            x = max(20, x)
+            y = max(20, y)
+        self.move(x, y)
 
-        # Apply stealth protection: Inaudible / Invisible to Screen Sharing & Recorders
-        apply_screen_share_protection(self)
-
-        # Auto-dismiss after 25 seconds
-        QTimer.singleShot(25000, self.close)
+        # Auto-dismiss after 30 seconds
+        QTimer.singleShot(30000, self.close)
 
     def mousePressEvent(self, event):
         self.close()
@@ -313,8 +330,10 @@ class OverlayManager(QObject):
         self.current_overlay = o
         o.show()
         o.raise_()
-        o.activateWindow()
-        QTimer.singleShot(26000, lambda: self.overlays.remove(o) if o in self.overlays else None)
+        # Non-focus stealing: keep focus in user's exam/code editor
+        # Apply anti-screen share protection AFTER window is shown so native HWND is ready
+        apply_screen_share_protection(o)
+        QTimer.singleShot(31000, lambda: self.overlays.remove(o) if o in self.overlays else None)
 
     @Slot()
     def hide_overlay(self):
@@ -358,6 +377,7 @@ def main():
 
     # ── Capture + solve worker ────────────────────────────────────────────
     def process_mode(mode: str):
+        comm.overlay_requested.emit(f"⚡ Solving {mode.upper()}...\n[Reading screen...]", 0.88)
         if state.screenshot_buffer:
             print(f"\n🔥 Processing {len(state.screenshot_buffer)} buffered screenshots (mode: {mode})")
             text = ocr_multiple_images(state.screenshot_buffer)
@@ -468,6 +488,13 @@ def main():
     def on_exit():
         print("\n🚪 Emergency exit requested!")
         state.typing_stop = True
+        try:
+            if sys.platform == 'win32':
+                os.system('taskkill /F /IM uvicorn.exe /T >nul 2>&1')
+            else:
+                os.system("lsof -ti:8000 | xargs kill -9 2>/dev/null")
+        except Exception:
+            pass
         comm.app_quit.emit()
 
     # ── Register pynput global hotkeys ───────────────────────────────────
@@ -556,6 +583,12 @@ def main():
 
     # ── Terminal interactive command loop (Zero-Permission Fallback) ──────
     def input_loop():
+        try:
+            if not sys.stdin or not hasattr(sys.stdin, 'isatty') or not sys.stdin.isatty():
+                return
+        except Exception:
+            return
+
         time.sleep(0.5)
         while True:
             try:
@@ -590,7 +623,8 @@ def main():
                 else:
                     print("  Unknown command. Available: m/8/9/0/b/f/g/r/e/d/n/i/q (ENTER=Coding)")
             except (KeyboardInterrupt, EOFError):
-                comm.app_quit.emit()
+                break
+            except Exception:
                 break
 
     input_thread = threading.Thread(target=input_loop, daemon=True)
@@ -627,9 +661,17 @@ def main():
     print("=" * 60)
 
     # Instant Welcome Popup on Screen
-    QTimer.singleShot(600, lambda: comm.overlay_requested.emit(
-        "🟢 ScriptACC Connected!\n─────────────────────────────\nModel: Groq 120B Active ⚡\n⌥+8 (Coding) | ⌥+M (MCQ)\nOr press ENTER in terminal!", 0.95
-    ))
+    welcome_msg = (
+        "🟢 HostLab / ScriptACC ACTIVE!\n"
+        "─────────────────────────────\n"
+        "⚡ AI Model: Groq 120B Ready\n"
+        "🎯 Alt + M : Solve MCQ / Pseudocode\n"
+        "💻 Alt + 8 : Solve Coding (DSA)\n"
+        "⌨️ Alt + F : Auto-Type Solution\n"
+        "👁 Alt + D : Show / Hide Overlay\n"
+        "🚪 Alt + Shift + X : Emergency Exit"
+    )
+    QTimer.singleShot(600, lambda: comm.overlay_requested.emit(welcome_msg, 0.95))
 
     sys.exit(app.exec())
 

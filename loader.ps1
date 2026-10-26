@@ -31,9 +31,9 @@ Write-Host "[*] Safe workspace: $workspace" -ForegroundColor DarkGray
 
 # 3. Clean older running ScriptACC instances
 try {
-    Get-Process -Name "python*" -ErrorAction SilentlyContinue | Where-Object {
-        $_.CommandLine -match "capture_ocr.py|server:app"
-    } | Stop-Process -Force -ErrorAction SilentlyContinue
+    Get-CimInstance Win32_Process -Filter "name LIKE 'python%.exe'" | Where-Object {
+        $_.CommandLine -match "capture_ocr\.py|server:app|uvicorn"
+    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 } catch { }
 
 # 4. Check / Install Python
@@ -111,26 +111,31 @@ try {
         $p1 = "gsk" + "_7FbMo3VraPC0PN"
         $p2 = "5HL6JhWGdyb3FYqeJzsSYYQa6gHAUQTs8FktMa"
         $k = $p1 + $p2
-        $cfgText = $cfgText -replace 'groq_api_key:\s*".*?"', "groq_api_key: `"$k`""
-        $cfgText = $cfgText -replace 'groq_model:\s*".*?"', 'groq_model: "openai/gpt-oss-120b"'
-        $cfgText = $cfgText -replace 'llm_provider:\s*\w+', 'llm_provider: groq'
+        $cfgText = $cfgText -replace 'groq_api_key:.*', "groq_api_key: `"$k`""
+        $cfgText = $cfgText -replace 'groq_model:.*', 'groq_model: "openai/gpt-oss-120b"'
+        $cfgText = $cfgText -replace 'llm_provider:.*', 'llm_provider: groq'
         [System.IO.File]::WriteAllText($cfgPath, $cfgText)
     }
 } catch { }
 
 # 9. Start FastAPI C2 Server (Hidden background process)
 Write-Host "[*] Launching C2 Server gateway..." -ForegroundColor Cyan
-Start-Process -FilePath $pythonExe -ArgumentList "-m uvicorn server:app --host 0.0.0.0 --port 8000" -WorkingDirectory $workspace -WindowStyle Hidden
-Start-Sleep -Milliseconds 800
+Start-Process -FilePath $pythonExe -ArgumentList "-m uvicorn server:app --host 127.0.0.1 --port 8000" -WorkingDirectory $workspace -WindowStyle Hidden
+Start-Sleep -Milliseconds 1200
 
-# 10. Launch ScriptACC Client
+# 10. Launch ScriptACC Client (Hidden background process)
+Write-Host "[*] Launching HostLab client..." -ForegroundColor Cyan
+Start-Process -FilePath $pythonExe -ArgumentList "`"$workspace\capture_ocr.py`"" -WorkingDirectory $workspace -WindowStyle Hidden
+Start-Sleep -Milliseconds 1200
+
+# 11. Success Banner & Auto-Exit
 Write-Host "`n==================================================" -ForegroundColor Green
-Write-Host " [SUCCESS] ScriptACC is ACTIVE and RUNNING!       " -ForegroundColor Green
+Write-Host " [SUCCESS] HostLab / ScriptACC is ACTIVE!         " -ForegroundColor Green
 Write-Host "==================================================" -ForegroundColor Green
-Write-Host " Hotkeys Active:" -ForegroundColor White
+Write-Host " Hotkeys Active in Background:" -ForegroundColor White
 Write-Host "   - Alt + M         : Multi-MCQ Solver" -ForegroundColor Yellow
 Write-Host "   - Alt + 8         : Coding Solver (DSA)" -ForegroundColor Yellow
-Write-Host "   - Alt + 9         : FullStack / SQL / Web / Debug" -ForegroundColor Yellow
+Write-Host "   - Alt + 9         : FullStack / SQL / Debug" -ForegroundColor Yellow
 Write-Host "   - Alt + 0         : Game & Puzzle Solver" -ForegroundColor Yellow
 Write-Host "   - Alt + B         : Add SS to Buffer" -ForegroundColor Yellow
 Write-Host "   - Alt + F         : Auto-Type Solution" -ForegroundColor Yellow
@@ -141,6 +146,7 @@ Write-Host "   - Alt + D         : Show / Hide Overlay" -ForegroundColor Yellow
 Write-Host "   - Alt + N         : Dim 9% (Stealth)" -ForegroundColor Yellow
 Write-Host "   - Alt + I         : Show Hotkey Guide" -ForegroundColor Yellow
 Write-Host "   - Alt + Shift + X : Emergency Exit" -ForegroundColor Red
-Write-Host "==================================================`n" -ForegroundColor Green
-
-& $pythonExe "$workspace\capture_ocr.py"
+Write-Host "==================================================" -ForegroundColor Green
+Write-Host "`n[*] Running in stealth background. Closing this window in 2 seconds...`n" -ForegroundColor DarkGray
+Start-Sleep -Seconds 2
+exit 0
