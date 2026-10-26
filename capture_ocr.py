@@ -438,32 +438,70 @@ def main():
             from pynput import keyboard as pkb
 
             hotkeys = {
+                # MCQ Solver
                 '<alt>+m': on_mcq,
                 '<ctrl>+<alt>+m': on_mcq,
+                '<cmd>+<alt>+m': on_mcq,
+                '<alt>+µ': on_mcq,
+                # Coding / DSA Solver
                 '<alt>+8': on_coding,
                 '<ctrl>+<alt>+8': on_coding,
+                '<cmd>+<alt>+8': on_coding,
+                '<alt>+•': on_coding,
+                # FullStack / SQL / Web
                 '<alt>+9': on_fullstack,
                 '<ctrl>+<alt>+9': on_fullstack,
+                '<cmd>+<alt>+9': on_fullstack,
+                '<alt>+ª': on_fullstack,
+                # Game & Puzzle Solver
                 '<alt>+0': on_game,
                 '<ctrl>+<alt>+0': on_game,
+                '<cmd>+<alt>+0': on_game,
+                '<alt>+º': on_game,
+                # Multi-Screenshot Buffer
                 '<alt>+b': on_buffer,
                 '<ctrl>+<alt>+b': on_buffer,
+                '<cmd>+<alt>+b': on_buffer,
+                '<alt>+∫': on_buffer,
+                # Auto-Type
                 '<alt>+f': on_auto_type,
                 '<ctrl>+<alt>+f': on_auto_type,
+                '<cmd>+<alt>+f': on_auto_type,
+                '<alt>+ƒ': on_auto_type,
+                # Ghost-Type (Stealth)
                 '<alt>+g': on_ghost_type,
                 '<ctrl>+<alt>+g': on_ghost_type,
+                '<cmd>+<alt>+g': on_ghost_type,
+                '<alt>+©': on_ghost_type,
+                # Pause / Resume
                 '<alt>+r': on_pause_resume,
                 '<ctrl>+<alt>+r': on_pause_resume,
+                '<cmd>+<alt>+r': on_pause_resume,
+                '<alt>+®': on_pause_resume,
+                # Stop Typing
                 '<alt>+e': on_stop_typing,
                 '<ctrl>+<alt>+e': on_stop_typing,
+                '<cmd>+<alt>+e': on_stop_typing,
+                '<alt>+´': on_stop_typing,
+                # Hide / Show Overlay
                 '<alt>+d': on_toggle_overlay,
                 '<ctrl>+<alt>+d': on_toggle_overlay,
+                '<cmd>+<alt>+d': on_toggle_overlay,
+                '<alt>+∂': on_toggle_overlay,
+                # Dim 9% (Stealth)
                 '<alt>+n': on_dim,
                 '<ctrl>+<alt>+n': on_dim,
+                '<cmd>+<alt>+n': on_dim,
+                '<alt>+~': on_dim,
+                # Guide HUD
                 '<alt>+i': on_guide,
                 '<ctrl>+<alt>+i': on_guide,
+                '<cmd>+<alt>+i': on_guide,
+                '<alt>+ˆ': on_guide,
+                # Emergency Exit
                 '<alt>+<shift>+x': on_exit,
                 '<ctrl>+<alt>+x': on_exit,
+                '<cmd>+<alt>+x': on_exit,
             }
 
             listener = pkb.GlobalHotKeys(hotkeys)
