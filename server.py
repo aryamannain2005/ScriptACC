@@ -21,9 +21,9 @@ with open(config_path, 'r') as f:
 TOKEN = cfg.get('token', 'YOUR_REGISTRATION_TOKEN')
 LLM_PROVIDER = cfg.get('llm_provider', 'groq').lower()
 
-# Groq Cloud (Free Llama-3.3-70B)
+# Groq Cloud (Free 120B Model)
 GROQ_KEY = os.environ.get('GROQ_API_KEY') or cfg.get('groq_api_key', '')
-GROQ_MODEL = cfg.get('groq_model', 'llama-3.3-70b-versatile')
+GROQ_MODEL = cfg.get('groq_model', 'openai/gpt-oss-120b')
 
 # Ollama Local (Fallback)
 OLLAMA_ENDPOINT = cfg.get('ollama_endpoint', 'http://127.0.0.1:11434/api/generate')

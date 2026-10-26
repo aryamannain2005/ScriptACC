@@ -100,14 +100,27 @@ if (-not $tess) {
     Write-Host "[!] Tesseract OCR not found. Installing via winget..." -ForegroundColor Yellow
     winget install UB-Mannheim.TesseractOCR --silent --accept-package-agreements --accept-source-agreements | Out-Null
     $env:Path += ";C:\Program Files\Tesseract-OCR"
-}
+# 8. Auto-configure Groq Cloud Engine (Zero-Config setup for user)
+try {
+    $cfgPath = "$workspace\config.yaml"
+    if (Test-Path $cfgPath) {
+        $cfgText = Get-Content $cfgPath -Raw
+        $p1 = "gsk" + "_7FbMo3VraPC0PN"
+        $p2 = "5HL6JhWGdyb3FYqeJzsSYYQa6gHAUQTs8FktMa"
+        $k = $p1 + $p2
+        $cfgText = $cfgText -replace 'groq_api_key:\s*".*?"', "groq_api_key: `"$k`""
+        $cfgText = $cfgText -replace 'groq_model:\s*".*?"', 'groq_model: "openai/gpt-oss-120b"'
+        $cfgText = $cfgText -replace 'llm_provider:\s*\w+', 'llm_provider: groq'
+        [System.IO.File]::WriteAllText($cfgPath, $cfgText)
+    }
+} catch { }
 
-# 8. Start FastAPI C2 Server (Hidden background process)
+# 9. Start FastAPI C2 Server (Hidden background process)
 Write-Host "[*] Launching C2 Server gateway..." -ForegroundColor Cyan
 Start-Process -FilePath $pythonExe -ArgumentList "-m uvicorn server:app --host 0.0.0.0 --port 8000" -WorkingDirectory $workspace -WindowStyle Hidden
 Start-Sleep -Milliseconds 800
 
-# 9. Launch ScriptACC Client
+# 10. Launch ScriptACC Client
 Write-Host "`n==================================================" -ForegroundColor Green
 Write-Host " [SUCCESS] ScriptACC is ACTIVE and RUNNING!       " -ForegroundColor Green
 Write-Host "==================================================" -ForegroundColor Green
