@@ -34,6 +34,18 @@ from PIL import Image
 import pyautogui
 import threading
 
+# Auto-detect Tesseract binary path on Windows
+if sys.platform == 'win32':
+    for p in [
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\Tesseract-OCR\tesseract.exe"),
+        os.path.expandvars(r"%USERPROFILE%\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"),
+    ]:
+        if os.path.exists(p):
+            pytesseract.pytesseract.tesseract_cmd = p
+            break
+
 from PySide6.QtWidgets import QApplication, QLabel
 from PySide6.QtCore import Qt, QTimer, QObject, Signal, Slot
 from PySide6.QtGui import QCursor
@@ -79,8 +91,23 @@ def capture_screen() -> Image.Image:
     return pyautogui.screenshot()
 
 
+def ensure_tesseract_cmd():
+    if sys.platform == 'win32':
+        for p in [
+            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+            r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+            os.path.expandvars(r"%LOCALAPPDATA%\Programs\Tesseract-OCR\tesseract.exe"),
+            os.path.expandvars(r"%USERPROFILE%\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"),
+        ]:
+            if os.path.exists(p):
+                pytesseract.pytesseract.tesseract_cmd = p
+                return True
+    return False
+
+
 def ocr_image(img: Image.Image) -> str:
     print("  🔍 Running OCR...")
+    ensure_tesseract_cmd()
     try:
         text = pytesseract.image_to_string(img, lang=OCR_LANG)
         return text.strip()
@@ -91,6 +118,7 @@ def ocr_image(img: Image.Image) -> str:
 
 def ocr_multiple_images(images: list) -> str:
     """OCR multiple buffered screenshots and combine text."""
+    ensure_tesseract_cmd()
     all_text = []
     for i, img in enumerate(images):
         print(f"  🔍 OCR on buffer image {i+1}/{len(images)}...")
