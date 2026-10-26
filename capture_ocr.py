@@ -261,23 +261,24 @@ def apply_screen_share_protection(widget):
 # ── Overlay UI Widget ────────────────────────────────────────────────────────
 
 class OverlayLabel(QLabel):
-    def __init__(self, message: str, opacity: float = 0.92):
+    def __init__(self, message: str, opacity: float = 0.90):
         super().__init__(message)
         self.setTextFormat(Qt.PlainText)
         self.setWordWrap(True)
-        self.setMaximumWidth(760)
+        self.setMaximumWidth(520)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.WindowDoesNotAcceptFocus)
         self.setAttribute(Qt.WA_StyledBackground, True)
 
+        # Sleek, compact stealth theme (blends in, no bright neon green border)
         self.setStyleSheet(
-            "background-color: #0d0e12;"
-            "color: #00FF66;"
-            "padding: 18px 24px;"
-            "border-radius: 12px;"
-            "font-family: 'Consolas', 'SF Mono', 'Menlo', monospace;"
-            "font-size: 13pt;"
+            "background-color: #121316;"
+            "color: #e6edf3;"
+            "padding: 10px 14px;"
+            "border-radius: 8px;"
+            "font-family: 'Consolas', 'Segoe UI', 'SF Mono', monospace;"
+            "font-size: 11pt;"
             "font-weight: 500;"
-            "border: 2px solid #00FF66;"
+            "border: 1px solid #30363d;"
         )
         self.setWindowOpacity(opacity)
         self.adjustSize()
@@ -285,22 +286,23 @@ class OverlayLabel(QLabel):
         # Clamp safely within visible screen boundaries
         cursor_pos = QCursor.pos()
         screen = QApplication.primaryScreen().availableGeometry()
-        x = cursor_pos.x() + 25
-        y = cursor_pos.y() + 25
+        x = cursor_pos.x() + 20
+        y = cursor_pos.y() + 20
         if x <= 50 and y <= 50:
-            x = screen.width() - self.width() - 50
-            y = 100
+            x = screen.width() - self.width() - 30
+            y = 80
         else:
-            if x + self.width() > screen.width() - 20:
-                x = screen.width() - self.width() - 20
-            if y + self.height() > screen.height() - 20:
-                y = screen.height() - self.height() - 20
-            x = max(20, x)
-            y = max(20, y)
+            if x + self.width() > screen.width() - 15:
+                x = screen.width() - self.width() - 15
+            if y + self.height() > screen.height() - 15:
+                y = screen.height() - self.height() - 15
+            x = max(15, x)
+            y = max(15, y)
         self.move(x, y)
 
-        # Auto-dismiss after 30 seconds
-        QTimer.singleShot(30000, self.close)
+        # Auto-dismiss: 4.5s for MCQs, 8s for long coding solutions (or instant click / Alt+D)
+        dismiss_ms = 4500 if len(message) < 250 else 8000
+        QTimer.singleShot(dismiss_ms, self.close)
 
     def mousePressEvent(self, event):
         self.close()
@@ -333,7 +335,8 @@ class OverlayManager(QObject):
         # Non-focus stealing: keep focus in user's exam/code editor
         # Apply anti-screen share protection AFTER window is shown so native HWND is ready
         apply_screen_share_protection(o)
-        QTimer.singleShot(31000, lambda: self.overlays.remove(o) if o in self.overlays else None)
+        dismiss_cleanup = 5000 if len(message) < 250 else 8500
+        QTimer.singleShot(dismiss_cleanup, lambda: self.overlays.remove(o) if o in self.overlays else None)
 
     @Slot()
     def hide_overlay(self):
@@ -377,7 +380,6 @@ def main():
 
     # ── Capture + solve worker ────────────────────────────────────────────
     def process_mode(mode: str):
-        comm.overlay_requested.emit(f"⚡ Solving {mode.upper()}...\n[Reading screen...]", 0.88)
         if state.screenshot_buffer:
             print(f"\n🔥 Processing {len(state.screenshot_buffer)} buffered screenshots (mode: {mode})")
             text = ocr_multiple_images(state.screenshot_buffer)
