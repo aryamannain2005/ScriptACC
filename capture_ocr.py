@@ -84,6 +84,14 @@ class AppState:
 
 state = AppState()
 
+# Write PID for clean process management
+try:
+    pid_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'client.pid')
+    with open(pid_file, 'w') as pf:
+        pf.write(str(os.getpid()))
+except Exception:
+    pass
+
 
 # ── Thread-safe Qt signal bridge ─────────────────────────────────────────────
 class Communicator(QObject):
@@ -380,35 +388,40 @@ def main():
 
     # ── Capture + solve worker ────────────────────────────────────────────
     def process_mode(mode: str):
-        if state.screenshot_buffer:
-            print(f"\n🔥 Processing {len(state.screenshot_buffer)} buffered screenshots (mode: {mode})")
-            text = ocr_multiple_images(state.screenshot_buffer)
-            state.screenshot_buffer.clear()
-        else:
-            print(f"\n🔥 Screen capture triggered (mode: {mode})")
-            img = capture_screen()
-            text = ocr_image(img)
+        try:
+            if state.screenshot_buffer:
+                print(f"\n🔥 Processing {len(state.screenshot_buffer)} buffered screenshots (mode: {mode})")
+                text = ocr_multiple_images(state.screenshot_buffer)
+                state.screenshot_buffer.clear()
+            else:
+                print(f"\n🔥 Screen capture triggered (mode: {mode})")
+                img = capture_screen()
+                text = ocr_image(img)
 
-        if not text:
-            print("  ⚠️ No text detected on screen.")
-            comm.overlay_requested.emit("⚠️ No text detected on screen.", 0.92)
-            return
+            if not text:
+                print("  ⚠️ No text detected on screen.")
+                comm.overlay_requested.emit("⚠️ No text detected on screen.\nEnsure question is visible.", 0.90)
+                return
 
-        print(f"  📝 {len(text)} characters extracted")
-        response = send_to_server(text, mode)
+            print(f"  📝 {len(text)} characters extracted")
+            response = send_to_server(text, mode)
 
-        if 'error' in response:
-            answer = f"❌ {response['error']}"
-        else:
-            answer = response.get('answer', 'No answer received.')
+            if 'error' in response:
+                answer = f"❌ {response['error']}"
+            else:
+                answer = response.get('answer', 'No answer received.')
 
-        state.last_answer = answer
-        print(f"\n  ✅ Answer ({mode}):\n{'─' * 55}")
-        print(answer)
-        print('─' * 55)
+            state.last_answer = answer
+            print(f"\n  ✅ Answer ({mode}):\n{'─' * 55}")
+            print(answer)
+            print('─' * 55)
 
-        opacity = 0.09 if state.overlay_dimmed else 0.92
-        comm.overlay_requested.emit(answer, opacity)
+            opacity = 0.10 if state.overlay_dimmed else 0.90
+            comm.overlay_requested.emit(answer, opacity)
+        except Exception as e:
+            err_msg = f"❌ Solver Error: {str(e)}"
+            print(f"  {err_msg}")
+            comm.overlay_requested.emit(err_msg, 0.90)
 
     # ── Action dispatchers ────────────────────────────────────────────────
     def on_mcq():
@@ -507,67 +520,83 @@ def main():
             hotkeys = {
                 # MCQ Solver
                 '<alt>+m': on_mcq,
+                '<alt>+M': on_mcq,
                 '<ctrl>+<alt>+m': on_mcq,
+                '<ctrl>+<alt>+M': on_mcq,
+                '<alt>+<shift>+m': on_mcq,
                 '<cmd>+<alt>+m': on_mcq,
                 '<alt>+µ': on_mcq,
                 # Coding / DSA Solver
                 '<alt>+8': on_coding,
                 '<ctrl>+<alt>+8': on_coding,
                 '<cmd>+<alt>+8': on_coding,
+                '<alt>+*': on_coding,
                 '<alt>+•': on_coding,
                 # FullStack / SQL / Web
                 '<alt>+9': on_fullstack,
                 '<ctrl>+<alt>+9': on_fullstack,
                 '<cmd>+<alt>+9': on_fullstack,
+                '<alt>+(': on_fullstack,
                 '<alt>+ª': on_fullstack,
                 # Game & Puzzle Solver
                 '<alt>+0': on_game,
                 '<ctrl>+<alt>+0': on_game,
                 '<cmd>+<alt>+0': on_game,
+                '<alt>+)': on_game,
                 '<alt>+º': on_game,
                 # Multi-Screenshot Buffer
                 '<alt>+b': on_buffer,
+                '<alt>+B': on_buffer,
                 '<ctrl>+<alt>+b': on_buffer,
                 '<cmd>+<alt>+b': on_buffer,
                 '<alt>+∫': on_buffer,
                 # Auto-Type
                 '<alt>+f': on_auto_type,
+                '<alt>+F': on_auto_type,
                 '<ctrl>+<alt>+f': on_auto_type,
                 '<cmd>+<alt>+f': on_auto_type,
                 '<alt>+ƒ': on_auto_type,
                 # Ghost-Type (Stealth)
                 '<alt>+g': on_ghost_type,
+                '<alt>+G': on_ghost_type,
                 '<ctrl>+<alt>+g': on_ghost_type,
                 '<cmd>+<alt>+g': on_ghost_type,
                 '<alt>+©': on_ghost_type,
                 # Pause / Resume
                 '<alt>+r': on_pause_resume,
+                '<alt>+R': on_pause_resume,
                 '<ctrl>+<alt>+r': on_pause_resume,
                 '<cmd>+<alt>+r': on_pause_resume,
                 '<alt>+®': on_pause_resume,
                 # Stop Typing
                 '<alt>+e': on_stop_typing,
+                '<alt>+E': on_stop_typing,
                 '<ctrl>+<alt>+e': on_stop_typing,
                 '<cmd>+<alt>+e': on_stop_typing,
                 '<alt>+´': on_stop_typing,
                 # Hide / Show Overlay
                 '<alt>+d': on_toggle_overlay,
+                '<alt>+D': on_toggle_overlay,
                 '<ctrl>+<alt>+d': on_toggle_overlay,
                 '<cmd>+<alt>+d': on_toggle_overlay,
                 '<alt>+∂': on_toggle_overlay,
                 # Dim 9% (Stealth)
                 '<alt>+n': on_dim,
+                '<alt>+N': on_dim,
                 '<ctrl>+<alt>+n': on_dim,
                 '<cmd>+<alt>+n': on_dim,
                 '<alt>+~': on_dim,
                 # Guide HUD
                 '<alt>+i': on_guide,
+                '<alt>+I': on_guide,
                 '<ctrl>+<alt>+i': on_guide,
                 '<cmd>+<alt>+i': on_guide,
                 '<alt>+ˆ': on_guide,
                 # Emergency Exit
                 '<alt>+<shift>+x': on_exit,
+                '<alt>+<shift>+X': on_exit,
                 '<ctrl>+<alt>+x': on_exit,
+                '<ctrl>+<alt>+X': on_exit,
                 '<cmd>+<alt>+x': on_exit,
             }
 

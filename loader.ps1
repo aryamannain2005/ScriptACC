@@ -31,9 +31,31 @@ Write-Host "[*] Safe workspace: $workspace" -ForegroundColor DarkGray
 
 # 3. Clean older running ScriptACC instances
 try {
-    Get-CimInstance Win32_Process -Filter "name LIKE 'python%.exe'" | Where-Object {
-        $_.CommandLine -match "capture_ocr\.py|server:app|uvicorn"
-    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    # Free port 8000 cleanly
+    $portProcs = Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
+    foreach ($p in $portProcs) { Stop-Process -Id $p -Force -ErrorAction SilentlyContinue }
+
+    # Clean previous PID files
+    if (Test-Path "$workspace\client.pid") {
+        $op = Get-Content "$workspace\client.pid" -ErrorAction SilentlyContinue
+        if ($op) { Stop-Process -Id $op -Force -ErrorAction SilentlyContinue }
+    }
+    if (Test-Path "$workspace\server.pid") {
+        $op = Get-Content "$workspace\server.pid" -ErrorAction SilentlyContinue
+        if ($op) { Stop-Process -Id $op -Force -ErrorAction SilentlyContinue }
+    }
+
+    # Clean lingering python processes
+    Get-Process -Name "python*", "pythonw*" -ErrorAction SilentlyContinue | Where-Object {
+        $_.Id -ne $PID
+    } | ForEach-Object {
+        try {
+            $cmd = (Get-CimInstance Win32_Process -Filter "ProcessId = $($_.Id)" -ErrorAction SilentlyContinue).CommandLine
+            if ($cmd -match "capture_ocr|uvicorn|server:app") {
+                Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+            }
+        } catch { }
+    }
 } catch { }
 
 # 4. Check / Install Python
@@ -118,15 +140,53 @@ try {
     }
 } catch { }
 
-# 9. Start FastAPI C2 Server (Hidden background process)
+# 9. Start FastAPI C2 Server (Hidden background process with health check)
 Write-Host "[*] Launching C2 Server gateway..." -ForegroundColor Cyan
-Start-Process -FilePath $pythonExe -ArgumentList "-m uvicorn server:app --host 127.0.0.1 --port 8000" -WorkingDirectory $workspace -WindowStyle Hidden
-Start-Sleep -Milliseconds 1200
+$serverLog = "$workspace\server.log"
+$serverErr = "$workspace\server_err.log"
+Start-Process -FilePath $pythonExe -ArgumentList "-m uvicorn server:app --host 127.0.0.1 --port 8000" -WorkingDirectory $workspace -WindowStyle Hidden -RedirectStandardOutput $serverLog -RedirectStandardError $serverErr
 
-# 10. Launch ScriptACC Client (Hidden background process)
+# Verify Server is responding
+$serverReady = $false
+for ($i = 0; $i -lt 8; $i++) {
+    Start-Sleep -Milliseconds 500
+    try {
+        $h = Invoke-RestMethod -Uri "http://127.0.0.1:8000/health" -TimeoutSec 2 -ErrorAction SilentlyContinue
+        if ($h.status -eq "ok") {
+            $serverReady = $true
+            break
+        }
+    } catch { }
+}
+
+if (-not $serverReady) {
+    Write-Host "[-] Server failed to start! Details from server_err.log:" -ForegroundColor Red
+    if (Test-Path $serverErr) { Get-Content $serverErr -Tail 15 }
+    Write-Host "`nPress any key to exit..."
+    [Console]::ReadKey() | Out-Null
+    return
+}
+Write-Host "[+] C2 Server is active and verified!" -ForegroundColor Green
+
+# 10. Launch ScriptACC Client (Clean ArgumentList without escaped quotes!)
 Write-Host "[*] Launching HostLab client..." -ForegroundColor Cyan
-Start-Process -FilePath $pythonExe -ArgumentList "`"$workspace\capture_ocr.py`"" -WorkingDirectory $workspace -WindowStyle Hidden
-Start-Sleep -Milliseconds 1200
+$clientLog = "$workspace\client.log"
+$clientErr = "$workspace\client_err.log"
+$clientScript = "$workspace\capture_ocr.py"
+Start-Process -FilePath $pythonExe -ArgumentList "$clientScript" -WorkingDirectory $workspace -WindowStyle Hidden -RedirectStandardOutput $clientLog -RedirectStandardError $clientErr
+Start-Sleep -Milliseconds 1500
+
+# Verify client didn't crash on launch
+if (Test-Path $clientErr) {
+    $errTxt = Get-Content $clientErr -Raw
+    if ($errTxt -and $errTxt.Trim() -and ($errTxt -match "Traceback|Error|Exception")) {
+        Write-Host "[-] Client startup error detected:" -ForegroundColor Red
+        Write-Host $errTxt
+        Write-Host "`nPress any key to exit..."
+        [Console]::ReadKey() | Out-Null
+        return
+    }
+}
 
 # 11. Success Banner & Auto-Exit
 Write-Host "`n==================================================" -ForegroundColor Green
@@ -147,6 +207,6 @@ Write-Host "   - Alt + N         : Dim 9% (Stealth)" -ForegroundColor Yellow
 Write-Host "   - Alt + I         : Show Hotkey Guide" -ForegroundColor Yellow
 Write-Host "   - Alt + Shift + X : Emergency Exit" -ForegroundColor Red
 Write-Host "==================================================" -ForegroundColor Green
-Write-Host "`n[*] Running in stealth background. Closing this window in 2 seconds...`n" -ForegroundColor DarkGray
-Start-Sleep -Seconds 2
+Write-Host "`n[*] Running in stealth background. Closing this window in 3 seconds...`n" -ForegroundColor DarkGray
+Start-Sleep -Seconds 3
 exit 0

@@ -13,6 +13,14 @@ import httpx
 
 app = FastAPI(title="ScriptACC C2 Gateway")
 
+# ── Write PID for process manager ─────────────────────────────────────────────
+try:
+    pid_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'server.pid')
+    with open(pid_file, 'w') as pf:
+        pf.write(str(os.getpid()))
+except Exception:
+    pass
+
 # ── Load config ──────────────────────────────────────────────────────────────
 config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.yaml')
 with open(config_path, 'r') as f:
