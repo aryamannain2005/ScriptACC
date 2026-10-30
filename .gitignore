@@ -11,4 +11,5 @@ __pycache__/
 # Temporary and local files
 *.tmp
 *.log
+*.pid
 .DS_Store

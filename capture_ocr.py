@@ -130,7 +130,12 @@ def ocr_image(img: Image.Image) -> str:
         try:
             import winocr
             result = winocr.recognize_pil_sync(img)
-            text = result.get('text', '').strip()
+            if hasattr(result, 'text'):
+                text = str(result.text).strip()
+            elif isinstance(result, dict):
+                text = str(result.get('text', '')).strip()
+            else:
+                text = str(result).strip()
             if text:
                 print(f"  ⚡ Extracted via Windows Native OCR ({len(text)} chars)")
                 return text
@@ -663,7 +668,7 @@ def main():
 
     # ── Startup Banner ───────────────────────────────────────────────────
     print("=" * 60)
-    print("       ScriptACC – HostLab macOS Client Ready")
+    print("       ScriptACC – HostLab AI Assistant Ready")
     print("=" * 60)
     active_provider = cfg.get('llm_provider', 'groq').upper()
     active_model = cfg.get('groq_model', 'openai/gpt-oss-120b') if cfg.get('llm_provider') == 'groq' else cfg.get('ollama_model', 'llama3.2:3b')
