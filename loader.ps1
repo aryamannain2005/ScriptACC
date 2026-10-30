@@ -150,15 +150,30 @@ if (-not $isLocal) {
     $zipFile = "$workspace\update_$timestamp.zip"
     $downloadSuccess = $false
 
+    # Helper: Validate downloaded file is a real zip and not an HTML proxy error page
+    function Test-ValidZip($path) {
+        if (-not (Test-Path $path)) { return $false }
+        if ((Get-Item $path).Length -lt 2000) { return $false }
+        try {
+            $stream = [System.IO.File]::OpenRead($path)
+            $b0 = $stream.ReadByte()
+            $b1 = $stream.ReadByte()
+            $stream.Close()
+            # 0x50 0x4B is the 'PK' zip magic header
+            if ($b0 -eq 0x50 -and $b1 -eq 0x4B) { return $true }
+        } catch { }
+        return $false
+    }
+
     try {
         Invoke-WebRequest -Uri $REPO_ZIP_URL -OutFile $zipFile -UserAgent $userAgent -UseBasicParsing -TimeoutSec 30 -ErrorAction Stop
-        if ((Test-Path $zipFile) -and ((Get-Item $zipFile).Length -gt 2000)) {
+        if (Test-ValidZip $zipFile) {
             $downloadSuccess = $true
         }
     } catch {
         if (Get-Command "curl.exe" -ErrorAction SilentlyContinue) {
             & curl.exe -sSL -A $userAgent "$REPO_ZIP_URL" -o "$zipFile"
-            if ((Test-Path $zipFile) -and ((Get-Item $zipFile).Length -gt 2000)) {
+            if (Test-ValidZip $zipFile) {
                 $downloadSuccess = $true
             }
         }
@@ -178,8 +193,32 @@ if (-not $isLocal) {
             }
             Remove-Item -Path $tempExtract -Recurse -Force -ErrorAction SilentlyContinue
         } catch {
-            Write-Host "[!] Note: Using existing local files." -ForegroundColor DarkGray
+            Write-Host "[!] Note: Could not extract update zip. Using existing files." -ForegroundColor DarkGray
         }
+    } else {
+        Remove-Item -Path $zipFile -Force -ErrorAction SilentlyContinue
+        # Direct raw file download fallback if network proxy blocked zip
+        Write-Host "[*] Trying direct raw file download..." -ForegroundColor DarkGray
+        $rawBase = "https://raw.githubusercontent.com/aryamannain2005/ScriptACC/main"
+        $filesToGet = @("server.py", "capture_ocr.py", "requirements.txt", "config.yaml")
+        foreach ($f in $filesToGet) {
+            $dest = "$workspace\$f"
+            if (-not (Test-Path $dest)) {
+                try {
+                    Invoke-WebRequest -Uri "$rawBase/$f" -OutFile $dest -UserAgent $userAgent -UseBasicParsing -TimeoutSec 15 -ErrorAction SilentlyContinue
+                } catch { }
+            }
+        }
+    }
+
+    # Verify critical files exist
+    if (-not (Test-Path "$workspace\server.py") -or -not (Test-Path "$workspace\capture_ocr.py")) {
+        Write-Host "[-] Essential project files could not be synced." -ForegroundColor Red
+        Write-Host "    Your Wi-Fi / proxy might be blocking GitHub downloads." -ForegroundColor Yellow
+        Write-Host "    Please clone or download the ScriptACC repository manually and run .\loader.ps1 inside that folder." -ForegroundColor Yellow
+        Write-Host "`nPress Enter to exit..."
+        try { [Console]::ReadLine() } catch { }
+        return
     }
 }
 
