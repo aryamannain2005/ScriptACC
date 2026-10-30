@@ -25,3 +25,4 @@ fi
 
 # 3. Launch Terminal Assistant
 "$PYTHON_BIN" cli.py "$@"
+

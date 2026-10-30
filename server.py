@@ -105,7 +105,7 @@ async def call_groq(system_prompt: str, user_prompt: str) -> str:
     last_error = None
     for model_name in models:
         try:
-            async with httpx.AsyncClient(timeout=45.0) as client:
+            async with httpx.AsyncClient(timeout=45.0, verify=False) as client:
                 resp = await client.post(
                     "https://api.groq.com/openai/v1/chat/completions",
                     json={
@@ -133,7 +133,7 @@ async def call_groq(system_prompt: str, user_prompt: str) -> str:
 async def call_ollama(system_prompt: str, user_prompt: str) -> str:
     """Call local Ollama model."""
     full_prompt = f"[System Instructions]\n{system_prompt}\n\n[User Input]\n{user_prompt}"
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    async with httpx.AsyncClient(timeout=120.0, verify=False) as client:
         resp = await client.post(
             OLLAMA_ENDPOINT,
             json={
@@ -148,7 +148,7 @@ async def call_ollama(system_prompt: str, user_prompt: str) -> str:
 
 async def call_openai(system_prompt: str, user_prompt: str) -> str:
     """Call OpenAI-compatible API."""
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
         resp = await client.post(
             "https://api.openai.com/v1/chat/completions",
             json={
